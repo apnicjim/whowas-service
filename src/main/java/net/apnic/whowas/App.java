@@ -30,7 +30,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
 import javax.annotation.PostConstruct;
+import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.ZoneId;
@@ -94,8 +96,8 @@ public class App {
         return new SimpleAsyncTaskExecutor();
     }
 
-    @Value("${snapshot.file}")
-    private String snapshotFile;
+    @Value("${snapshot.file:#{null}}")
+    private String snapshotFilePath;
 
     @Autowired
     ApplicationContext context;
@@ -108,25 +110,44 @@ public class App {
 
     @PostConstruct
     public void initialise() {
-        dbLoader = new RipeDbLoader(jdbcOperations, -1L);
+        dbLoader = new RipeDbLoader(jdbcOperations);
         executorService.execute(this::buildTree);
     }
 
     private void buildTree() {
-        if (snapshotFile != null) {
-            LOGGER.info("Attempting to deserialise from {}", snapshotFile);
-            try (InputStream resourceStream = context.getResource("file:///" + snapshotFile).getInputStream();
+        if (snapshotFilePath != null) {
+            LOGGER.info("Attempting to deserialise from {}", snapshotFilePath);
+
+            try (InputStream resourceStream = context.getResource("file:///" + snapshotFilePath).getInputStream();
                 InflaterInputStream zipStream = new InflaterInputStream(resourceStream);
-                FSTObjectInput objStream = new FSTObjectInput(zipStream)) {
+                FSTObjectInput objStream = new FSTObjectInput(zipStream))
+            {
                 long serial = objStream.readLong();
                 history.deserialize((History)objStream.readObject());
                 dbLoader.setLastSerial(serial);
-            } catch (IOException | ClassNotFoundException ex) {
+            }
+            catch(FileNotFoundException ex) {
+            File snapshotFile = new File(snapshotFilePath);
+
+                if(snapshotFile.exists() == false) {
+                    LOGGER.warn("Snapshot file \"{}\" does not exist",
+                                snapshotFilePath);
+                }
+                else if(snapshotFile.canRead() == false) {
+                    LOGGER.warn("Can not read from snapshot file {}",
+                                snapshotFilePath);
+                }
+                else {
+                    LOGGER.warn("Exception during load", ex);
+                }
+            }
+            catch (IOException | ClassNotFoundException ex) {
                 LOGGER.error("Exception during load", ex);
             }
         }
 
-        LOGGER.info("Loading history from database, starting at #{}", dbLoader.getLastSerial());
+        LOGGER.info("Loading history from database, starting at #{}",
+                    dbLoader.getLastSerial());
         try {
             Bar bar = new Bar(107, LOGGER::info);
             final ZonedDateTime lastDate[] = { ZonedDateTime.of(2008, 1, 1, 1, 1, 1,1, ZoneId.systemDefault()) };
@@ -148,7 +169,7 @@ public class App {
 
     @Bean
     @ConditionalOnProperty(value="snapshot.file")
-    Endpoint<Boolean> snapshotEndpoint(@Value("${snapshot.file}") String snapshotFile) {
+    Endpoint<Boolean> snapshotEndpoint(@Value("${snapshot.file}") String snapshotFilePath) {
         return new Endpoint<Boolean>() {
             @Override
             public String getId() {
@@ -168,7 +189,7 @@ public class App {
             @Override
             public Boolean invoke() {
                 try {
-                    writeSnapshot(snapshotFile);
+                    writeSnapshot(snapshotFilePath);
                 } catch (IOException ioex) {
                     LOGGER.error("Could not write snapshot file", ioex);
                     return false;

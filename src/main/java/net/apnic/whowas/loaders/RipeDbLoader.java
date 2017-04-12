@@ -22,13 +22,13 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class RipeDbLoader implements Loader {
+	private static final long DEFAULT_SERIAL = -1L;
     private static final Logger LOGGER = LoggerFactory.getLogger(RipeDbLoader.class);
 
-    private long lastSerial;
+    private long lastSerial = DEFAULT_SERIAL;
     private final transient JdbcOperations operations;
 
-    public RipeDbLoader(JdbcOperations jdbcOperations, long serial) {
-        this.lastSerial = serial;
+    public RipeDbLoader(JdbcOperations jdbcOperations) {
         this.operations = jdbcOperations;
     }
 
@@ -71,10 +71,12 @@ public class RipeDbLoader implements Loader {
         final Object[] args = arguments;
 
         operations.query(
-                c -> {
-                    PreparedStatement stmt = c.prepareStatement(q, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
+                connection -> {
+                    PreparedStatement stmt =
+						connection.prepareStatement(q, ResultSet.TYPE_FORWARD_ONLY,
+													ResultSet.CONCUR_READ_ONLY);
                     try {
-                        stmt.setFetchSize(Integer.MIN_VALUE);
+                        stmt.setFetchSize(Integer.MAX_VALUE);
                         for (int i = 0; i < args.length; i++) {
                             stmt.setObject(i+1, args[i]);
                         }
@@ -89,7 +91,7 @@ public class RipeDbLoader implements Loader {
             long nextSerial = rs.getLong("serial");
             if (nextSerial > lastSerial) {
                 LOGGER.info("Data refreshed up to serial {}", nextSerial);
-                lastSerial = nextSerial;
+				setLastSerial(nextSerial);
             }
         });
         LOGGER.debug("All database records loaded");
