@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class RipeDbLoader implements Loader {
-	private static final long DEFAULT_SERIAL = -1L;
+    private static final long DEFAULT_SERIAL = -1L;
     private static final Logger LOGGER = LoggerFactory.getLogger(RipeDbLoader.class);
 
     private long lastSerial = DEFAULT_SERIAL;
