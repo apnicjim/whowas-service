@@ -4,14 +4,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.servlet.http.HttpServletRequest;
 
-import net.apnic.whowas.history.ObjectHistory;
-import net.apnic.whowas.history.ObjectIndex;
-import net.apnic.whowas.history.ObjectKey;
-import net.apnic.whowas.history.ObjectSearchIndex;
-import net.apnic.whowas.history.ObjectSearchKey;
-import net.apnic.whowas.history.Revision;
+import net.apnic.whowas.history.*;
 import net.apnic.whowas.intervaltree.IntervalTree;
 import net.apnic.whowas.rdap.Error;
 import net.apnic.whowas.rdap.http.RdapConstants;
@@ -35,7 +31,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class RDAPControllerUtil
 {
-    private final IntervalTree<IP, ObjectHistory, IpInterval> intervalTree;
+    private final IntervalTree<IP, ObjectHistory, IpInterval> ipListIntervalTree;
     private final ObjectIndex objectIndex;
     private final ObjectSearchIndex searchIndex;
     private HttpHeaders responseHeaders = null;
@@ -50,12 +46,12 @@ public class RDAPControllerUtil
     @Autowired
     public RDAPControllerUtil(ObjectIndex objectIndex,
         ObjectSearchIndex searchIndex,
-        IntervalTree<IP, ObjectHistory, IpInterval> intervalTree,
+        History history,
         RDAPResponseMaker responseMaker)
     {
         setupResponseHeaders();
         this.objectIndex = objectIndex;
-        this.intervalTree = intervalTree;
+        this.ipListIntervalTree = ipListIntervalTree(history);
         this.responseMaker = responseMaker;
         this.searchIndex = searchIndex;
     }
@@ -99,7 +95,7 @@ public class RDAPControllerUtil
             (range.low().getAddressFamily() == IP.AddressFamily.IPv4 ? 8 : 16);
 
         List<ObjectHistory> ipHistory =
-            intervalTree
+            ipListIntervalTree
                 .intersecting(range)
                 .filter(t -> t.fst().prefixSize() <= pfxCap)
                 .sorted(Comparator.comparing(Tuple::fst))
@@ -154,7 +150,7 @@ public class RDAPControllerUtil
     public ResponseEntity<TopLevelObject> mostCurrentResponseGet(
         HttpServletRequest request, IpInterval range)
     {
-        return intervalTree.equalToAndLeastSpecific(range)
+        return ipListIntervalTree.equalToAndLeastSpecific(range)
             .filter(t -> t.snd().mostCurrent().isPresent())
             .reduce((a, b) -> a.fst().compareTo(b.fst()) <= 0 ? b : a)
             .flatMap(t -> t.snd().mostCurrent())
@@ -172,5 +168,43 @@ public class RDAPControllerUtil
     {
         responseHeaders = new HttpHeaders();
         responseHeaders.setContentType(RdapConstants.RDAP_MEDIA_TYPE);
+    }
+
+    private IntervalTree<IP, ObjectHistory, IpInterval> ipListIntervalTree(History history)
+    {
+        return new IntervalTree<IP, ObjectHistory, IpInterval>()
+        {
+            @Override
+            public Stream<Tuple<IpInterval, ObjectHistory>>
+            equalToAndLeastSpecific(IpInterval range) {
+                return history.getTree().equalToAndLeastSpecific(range)
+                        .flatMap(p -> history
+                                .getObjectHistory(p.snd())
+                                .map(Stream::of)
+                                .orElse(Stream.empty())
+                                .map(h -> new Tuple<>(p.fst(), h)));
+            }
+
+            @Override
+            public Optional<ObjectHistory> exact(IpInterval range) {
+                return history.getTree().exact(range)
+                        .flatMap(history::getObjectHistory);
+            }
+
+            @Override
+            public Stream<Tuple<IpInterval, ObjectHistory>> intersecting(IpInterval range) {
+                return history.getTree().intersecting(range)
+                        .flatMap(p -> history
+                                .getObjectHistory(p.snd())
+                                .map(Stream::of)
+                                .orElse(Stream.empty())
+                                .map(h -> new Tuple<>(p.fst(), h)));
+            }
+
+            @Override
+            public int size() {
+                return history.getTree().size();
+            }
+        };
     }
 }

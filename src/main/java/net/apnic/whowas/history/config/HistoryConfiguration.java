@@ -26,43 +26,5 @@ public class HistoryConfiguration
         return new History();
     }
 
-    @Autowired
-    @Bean
-    public IntervalTree<IP, ObjectHistory, IpInterval> ipListIntervalTree(History history)
-    {
-        return new IntervalTree<IP, ObjectHistory, IpInterval>()
-        {
-            @Override
-            public Stream<Tuple<IpInterval, ObjectHistory>>
-                equalToAndLeastSpecific(IpInterval range) {
-                return history.getTree().equalToAndLeastSpecific(range)
-                        .flatMap(p -> history
-                                .getObjectHistory(p.snd())
-                                .map(Stream::of)
-                                .orElse(Stream.empty())
-                                .map(h -> new Tuple<>(p.fst(), h)));
-            }
 
-            @Override
-            public Optional<ObjectHistory> exact(IpInterval range) {
-                return history.getTree().exact(range)
-                        .flatMap(history::getObjectHistory);
-            }
-
-            @Override
-            public Stream<Tuple<IpInterval, ObjectHistory>> intersecting(IpInterval range) {
-                return history.getTree().intersecting(range)
-                        .flatMap(p -> history
-                                .getObjectHistory(p.snd())
-                                .map(Stream::of)
-                                .orElse(Stream.empty())
-                                .map(h -> new Tuple<>(p.fst(), h)));
-            }
-
-            @Override
-            public int size() {
-                return history.getTree().size();
-            }
-        };
-    }
 }
