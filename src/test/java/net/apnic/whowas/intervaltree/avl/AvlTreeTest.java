@@ -13,10 +13,14 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
@@ -50,36 +54,51 @@ public class AvlTreeTest {
         assertThat("equal ends don't matter", tree.exact(new IntInterval(20, 39)), is(Optional.of("tusked")));
     }
 
+
     @Test
     public void testEqualToAndLeastSpecific() throws Exception
     {
+        Random r = new Random();
+        int min = 20;
+        int max = 50;
+        Supplier<IntInterval> randomIntInterval = () -> {
+            int a = r.nextInt((max - min) + 1) + min;
+            int b = r.nextInt((max - min) + 1) + min;
+            return a < b ? new IntInterval(a, b) : new IntInterval(b, a);
+        };
+
         AvlTree<Integer, String, IntInterval> tree = new AvlTree<>();
-        tree = tree.insert(new IntInterval(20, 30), "green tree");
-        tree = tree.insert(new IntInterval(33, 45), "corroboree");
-        tree = tree.insert(new IntInterval(30, 42), "rocket");
-        tree = tree.insert(new IntInterval(39, 39), "bleating tree");
-        tree = tree.insert(new IntInterval(20, 39), "tusked");
-        tree = tree.insert(new IntInterval(20, 38), "space");
-        tree = tree.insert(new IntInterval(40, 50), "blue");
-        List<String> frogs = tree.equalToAndLeastSpecific(new IntInterval(38, 40))
-            .map(Tuple::snd).collect(Collectors.toList());
-        assertThat("there are two frogs in range", frogs.size(), is(2));
-        assertThat("there exists a corroboree", frogs.contains("corroboree"), is(true));
-        assertThat("there exists a rocket", frogs.contains("rocket"), is(true));
+        for(int i = 0; i <= 500; i++) {
+            try {
+                tree = tree.insert(randomIntInterval.get(), "dummy");
+            } catch (IllegalArgumentException e) {
+                //skip duplicate keys
+            }
+        }
+        AvlTree<Integer, String, IntInterval> finalTree = tree;
 
-        frogs = tree.equalToAndLeastSpecific(new IntInterval(0, 100))
-            .map(Tuple::snd).collect(Collectors.toList());
-        assertThat("there are no frogs in range", frogs.size(), is(0));
+        Stream.generate(randomIntInterval)
+                .limit(500)
+                .forEach(
+                queryInterval -> {
+                    finalTree.equalToAndLeastSpecific(queryInterval)
+                            .map(Tuple::fst)
+                            .forEach(i -> {
+                                        Predicate<IntInterval> iContains = other -> i.low().compareTo(other.low()) <= 0 &&
+                                                i.high().compareTo(other.high()) >= 0;
 
-        frogs = tree.equalToAndLeastSpecific(new IntInterval(41, 49))
-            .map(Tuple::snd).collect(Collectors.toList());
-        assertThat("there is one frog in range", frogs.size(), is(1));
-        assertThat("there exists a blue", frogs.contains("blue"), is(true));
-
-        frogs = tree.equalToAndLeastSpecific(new IntInterval(40, 50))
-            .map(Tuple::snd).collect(Collectors.toList());
-        assertThat("there are is one frog in range", frogs.size(), is(1));
-        assertThat("there exists a blue", frogs.contains("blue"), is(true));
+                                        assertTrue(
+                                                "The returned interval " + i + " contains the query interval " + queryInterval,
+                                                iContains.test(queryInterval));
+                                    }
+                            );
+                    List<IntInterval> containing = finalTree.equalToAndLeastSpecific(queryInterval)
+                            .map(Tuple::fst).collect(Collectors.toList());
+                    List<IntInterval> intersecting = finalTree.intersecting(queryInterval)
+                            .map(Tuple::fst).collect(Collectors.toList());
+                    assertThat("The keys containing " + queryInterval + " are a subset of the keys intersecting " + queryInterval
+                            , intersecting, (Matcher) hasItems(containing.toArray()));
+                });
     }
 
     @Test
