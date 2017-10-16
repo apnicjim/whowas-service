@@ -9,6 +9,7 @@ import net.apnic.whowas.progress.Bar;
 //import net.apnic.whowas.types.IP;
 //import net.apnic.whowas.types.IpInterval;
 //import net.apnic.whowas.types.Tuple;
+import net.apnic.whowas.search.SearchEngine;
 import org.nustaq.serialization.FSTObjectInput;
 import org.nustaq.serialization.FSTObjectOutput;
 import org.slf4j.Logger;
@@ -56,6 +57,9 @@ public class App {
 
     @Autowired
     private History history = null;
+
+    @Autowired
+    private SearchEngine searchEngine;
 
     public static void main(String[] args) {
         SpringApplication app = new SpringApplication(App.class);
@@ -163,6 +167,7 @@ public class App {
                     bar.inc();
                 }
                 history.addRevision(k, r);
+                searchEngine.putIndexEntry(r, k);
             });
         } catch (Exception ex) {
             LOGGER.error("Failed to load data: {}", ex.getLocalizedMessage(), ex);

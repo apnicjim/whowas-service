@@ -6,6 +6,7 @@ import java.util.stream.Stream;
 import net.apnic.whowas.history.History;
 import net.apnic.whowas.history.ObjectHistory;
 import net.apnic.whowas.history.ObjectIndex;
+import net.apnic.whowas.history.ObjectKey;
 import net.apnic.whowas.intervaltree.IntervalTree;
 import net.apnic.whowas.search.SearchEngine;
 import net.apnic.whowas.types.IP;
@@ -19,11 +20,10 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class HistoryConfiguration
 {
-    @Autowired
     @Bean
-    public History history(SearchEngine searchEngine)
+    public History history()
     {
-        return new History(searchEngine);
+        return new History();
     }
 
     @Autowired
@@ -37,7 +37,7 @@ public class HistoryConfiguration
                 equalToAndLeastSpecific(IpInterval range) {
                 return history.getTree().equalToAndLeastSpecific(range)
                         .flatMap(p -> history
-                                .historyForObject(p.snd())
+                                .getObjectHistory(p.snd())
                                 .map(Stream::of)
                                 .orElse(Stream.empty())
                                 .map(h -> new Tuple<>(p.fst(), h)));
@@ -46,14 +46,14 @@ public class HistoryConfiguration
             @Override
             public Optional<ObjectHistory> exact(IpInterval range) {
                 return history.getTree().exact(range)
-                        .flatMap(history::historyForObject);
+                        .flatMap(history::getObjectHistory);
             }
 
             @Override
             public Stream<Tuple<IpInterval, ObjectHistory>> intersecting(IpInterval range) {
                 return history.getTree().intersecting(range)
                         .flatMap(p -> history
-                                .historyForObject(p.snd())
+                                .getObjectHistory(p.snd())
                                 .map(Stream::of)
                                 .orElse(Stream.empty())
                                 .map(h -> new Tuple<>(p.fst(), h)));
@@ -64,12 +64,5 @@ public class HistoryConfiguration
                 return history.getTree().size();
             }
         };
-    }
-
-    @Autowired
-    @Bean
-    public ObjectIndex objectIndex(History history)
-    {
-        return history;
     }
 }
