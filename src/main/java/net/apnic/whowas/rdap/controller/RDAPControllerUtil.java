@@ -135,11 +135,14 @@ public class RDAPControllerUtil
     public ResponseEntity<TopLevelObject> mostCurrentResponseGet(
         HttpServletRequest request, ObjectSearchKey objectSearchKey)
     {
-        List<RdapObject> searchObjects = objectIndex.historyForObject(
-            searchIndex.historySearchForObject(objectSearchKey))
-            .filter(oHistory -> oHistory.mostCurrent().isPresent())
-            .map(oHistory -> oHistory.mostCurrent().get().getContents())
-            .collect(Collectors.toList());
+        List<RdapObject> searchObjects =
+            searchIndex.historySearchForObject(objectSearchKey)
+                    .map(objectIndex::historyForObject)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .filter(oHistory -> oHistory.mostCurrent().isPresent())
+                    .map(oHistory -> oHistory.mostCurrent().get().getContents())
+                    .collect(Collectors.toList());
 
         return new ResponseEntity<TopLevelObject>(
             responseMaker.makeResponse(

@@ -15,6 +15,4 @@ public interface ObjectIndex
      * @return
      */
     Optional<ObjectHistory> historyForObject(ObjectKey objectKey);
-
-    Stream<ObjectHistory> historyForObject(Stream<ObjectKey> objectKeys);
 }
