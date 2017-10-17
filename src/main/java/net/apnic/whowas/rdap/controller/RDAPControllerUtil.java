@@ -3,11 +3,13 @@ package net.apnic.whowas.rdap.controller;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.servlet.http.HttpServletRequest;
 
 import net.apnic.whowas.history.*;
+import net.apnic.whowas.intervaltree.Interval;
 import net.apnic.whowas.intervaltree.IntervalTree;
 import net.apnic.whowas.rdap.Error;
 import net.apnic.whowas.rdap.http.RdapConstants;
@@ -31,7 +33,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class RDAPControllerUtil
 {
-    private final IntervalTree<IP, ObjectHistory, IpInterval> ipListIntervalTree;
+    private final IntervalTree<IP, ObjectHistory, IpInterval> historyTree;
     private final ObjectIndex objectIndex;
     private final ObjectSearchIndex searchIndex;
     private HttpHeaders responseHeaders = null;
@@ -51,7 +53,9 @@ public class RDAPControllerUtil
     {
         setupResponseHeaders();
         this.objectIndex = objectIndex;
-        this.ipListIntervalTree = ipListIntervalTree(history.getTree(), history::getObjectHistory);
+        this.historyTree = lazyMap(
+                history.getTree(),
+                objectKey -> history.getObjectHistory(objectKey).orElse(null));
         this.responseMaker = responseMaker;
         this.searchIndex = searchIndex;
     }
@@ -95,7 +99,7 @@ public class RDAPControllerUtil
             (range.low().getAddressFamily() == IP.AddressFamily.IPv4 ? 8 : 16);
 
         List<ObjectHistory> ipHistory =
-            ipListIntervalTree
+            historyTree
                 .intersecting(range)
                 .filter(t -> t.first().prefixSize() <= pfxCap)
                 .sorted(Comparator.comparing(Tuple::first))
@@ -150,7 +154,7 @@ public class RDAPControllerUtil
     public ResponseEntity<TopLevelObject> mostCurrentResponseGet(
         HttpServletRequest request, IpInterval range)
     {
-        return ipListIntervalTree.containing(range)
+        return historyTree.containing(range)
             .filter(t -> t.second().mostCurrent().isPresent())
             .reduce((a, b) -> a.first().compareTo(b.first()) <= 0 ? b : a)
             .flatMap(t -> t.second().mostCurrent())
@@ -170,37 +174,32 @@ public class RDAPControllerUtil
         responseHeaders.setContentType(RdapConstants.RDAP_MEDIA_TYPE);
     }
 
-    private IntervalTree<IP, ObjectHistory, IpInterval> ipListIntervalTree(
-            IntervalTree<IP, ObjectKey, IpInterval> tree,
-            ObjectIndex objectIndex)
-    {
-        return new IntervalTree<IP, ObjectHistory, IpInterval>()
+    private <K extends Comparable<K>, V, V2, I extends Interval<K>> IntervalTree<K, V2, I> lazyMap(
+            IntervalTree<K, V, I> tree, Function<V, V2> mapper) {
+        return new IntervalTree<K, V2, I>()
         {
             @Override
-            public Stream<Tuple<IpInterval, ObjectHistory>>
-            containing(IpInterval range) {
+            public Stream<Tuple<I, V2>>
+            containing(I range) {
                 return tree.containing(range)
-                        .flatMap(p -> objectIndex
-                                .historyForObject(p.second())
+                        .flatMap(tuple -> Optional.ofNullable(mapper.apply(tuple.second()))
                                 .map(Stream::of)
                                 .orElse(Stream.empty())
-                                .map(h -> new Tuple<>(p.first(), h)));
+                                .map(v2 -> new Tuple<>(tuple.first(), v2)));
             }
 
             @Override
-            public Optional<ObjectHistory> exact(IpInterval range) {
-                return tree.exact(range)
-                        .flatMap(objectIndex::historyForObject);
+            public Optional<V2> exact(I range) {
+                return tree.exact(range).map(mapper);
             }
 
             @Override
-            public Stream<Tuple<IpInterval, ObjectHistory>> intersecting(IpInterval range) {
+            public Stream<Tuple<I, V2>> intersecting(I range) {
                 return tree.intersecting(range)
-                        .flatMap(p -> objectIndex
-                                .historyForObject(p.second())
+                        .flatMap(tuple -> Optional.ofNullable(mapper.apply(tuple.second()))
                                 .map(Stream::of)
                                 .orElse(Stream.empty())
-                                .map(h -> new Tuple<>(p.first(), h)));
+                                .map(v2 -> new Tuple<>(tuple.first(), v2)));
             }
 
             @Override
