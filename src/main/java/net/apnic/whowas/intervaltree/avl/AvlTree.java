@@ -38,7 +38,7 @@ public class AvlTree<K extends Comparable<K>, V, I extends Interval<K>>
     }
 
     @Override
-    public Stream<Tuple<I, V>> equalToAndLeastSpecific(I range)
+    public Stream<Tuple<I, V>> containing(I range)
     {
         return StreamSupport.stream(new EqualOrGreaterSpliterator(root, range), true);
     }

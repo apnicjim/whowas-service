@@ -150,7 +150,7 @@ public class RDAPControllerUtil
     public ResponseEntity<TopLevelObject> mostCurrentResponseGet(
         HttpServletRequest request, IpInterval range)
     {
-        return ipListIntervalTree.equalToAndLeastSpecific(range)
+        return ipListIntervalTree.containing(range)
             .filter(t -> t.snd().mostCurrent().isPresent())
             .reduce((a, b) -> a.fst().compareTo(b.fst()) <= 0 ? b : a)
             .flatMap(t -> t.snd().mostCurrent())
@@ -176,8 +176,8 @@ public class RDAPControllerUtil
         {
             @Override
             public Stream<Tuple<IpInterval, ObjectHistory>>
-            equalToAndLeastSpecific(IpInterval range) {
-                return history.getTree().equalToAndLeastSpecific(range)
+            containing(IpInterval range) {
+                return history.getTree().containing(range)
                         .flatMap(p -> history
                                 .getObjectHistory(p.snd())
                                 .map(Stream::of)

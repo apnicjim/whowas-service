@@ -15,7 +15,6 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -56,7 +55,7 @@ public class AvlTreeTest {
 
 
     @Test
-    public void testEqualToAndLeastSpecific() throws Exception
+    public void testContaining() throws Exception
     {
         Random r = new Random();
         int min = 20;
@@ -81,7 +80,7 @@ public class AvlTreeTest {
                 .limit(500)
                 .forEach(
                 queryInterval -> {
-                    finalTree.equalToAndLeastSpecific(queryInterval)
+                    finalTree.containing(queryInterval)
                             .map(Tuple::fst)
                             .forEach(i -> {
                                         Predicate<IntInterval> iContains = other -> i.low().compareTo(other.low()) <= 0 &&
@@ -92,7 +91,7 @@ public class AvlTreeTest {
                                                 iContains.test(queryInterval));
                                     }
                             );
-                    List<IntInterval> containing = finalTree.equalToAndLeastSpecific(queryInterval)
+                    List<IntInterval> containing = finalTree.containing(queryInterval)
                             .map(Tuple::fst).collect(Collectors.toList());
                     List<IntInterval> intersecting = finalTree.intersecting(queryInterval)
                             .map(Tuple::fst).collect(Collectors.toList());
