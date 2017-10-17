@@ -1,8 +1,18 @@
 package net.apnic.whowas;
 
 import net.apnic.whowas.history.History;
+import net.apnic.whowas.history.ObjectHistory;
+import net.apnic.whowas.history.ObjectIndex;
+import net.apnic.whowas.history.ObjectSearchIndex;
+import net.apnic.whowas.intervaltree.Interval;
+import net.apnic.whowas.intervaltree.IntervalTree;
 import net.apnic.whowas.loaders.RipeDbLoader;
 import net.apnic.whowas.progress.Bar;
+import net.apnic.whowas.rdap.controller.RDAPControllerUtil;
+import net.apnic.whowas.rdap.controller.RDAPResponseMaker;
+import net.apnic.whowas.types.IP;
+import net.apnic.whowas.types.IpInterval;
+import net.apnic.whowas.types.Tuple;
 import org.nustaq.serialization.FSTObjectInput;
 import org.nustaq.serialization.FSTObjectOutput;
 import org.slf4j.Logger;
@@ -31,11 +41,14 @@ import java.io.InputStream;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.Properties;
+import java.util.function.Function;
+import java.util.stream.Stream;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -50,6 +63,57 @@ public class App {
     public History history()
     {
         return new History();
+    }
+
+    private <K extends Comparable<K>, V, V2, I extends Interval<K>> IntervalTree<K, V2, I> lazyMap(
+            IntervalTree<K, V, I> tree, Function<V, V2> mapper) {
+        return new IntervalTree<K, V2, I>()
+        {
+            @Override
+            public Stream<Tuple<I, V2>>
+            containing(I range) {
+                return tree.containing(range)
+                        .flatMap(tuple -> Optional.ofNullable(mapper.apply(tuple.second()))
+                                .map(Stream::of)
+                                .orElse(Stream.empty())
+                                .map(v2 -> new Tuple<>(tuple.first(), v2)));
+            }
+
+            @Override
+            public Optional<V2> exact(I range) {
+                return tree.exact(range).map(mapper);
+            }
+
+            @Override
+            public Stream<Tuple<I, V2>> intersecting(I range) {
+                return tree.intersecting(range)
+                        .flatMap(tuple -> Optional.ofNullable(mapper.apply(tuple.second()))
+                                .map(Stream::of)
+                                .orElse(Stream.empty())
+                                .map(v2 -> new Tuple<>(tuple.first(), v2)));
+            }
+
+            @Override
+            public int size() {
+                return tree.size();
+            }
+        };
+    }
+
+    @Bean
+    @Autowired
+    public RDAPControllerUtil rdapControllerUtil(
+        ObjectIndex objectIndex,
+        ObjectSearchIndex searchIndex,
+        RDAPResponseMaker responseMaker) {
+
+        return new RDAPControllerUtil(
+                objectIndex,
+                searchIndex,
+                lazyMap(
+                        history().getTree(),
+                        objectKey -> history().getObjectHistory(objectKey).orElse(null)),
+                responseMaker);
     }
 
     public static void main(String[] args) {

@@ -1,36 +1,26 @@
 package net.apnic.whowas.rdap.controller;
 
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import javax.servlet.http.HttpServletRequest;
-
 import net.apnic.whowas.history.*;
-import net.apnic.whowas.intervaltree.Interval;
 import net.apnic.whowas.intervaltree.IntervalTree;
 import net.apnic.whowas.rdap.Error;
+import net.apnic.whowas.rdap.*;
 import net.apnic.whowas.rdap.http.RdapConstants;
-import net.apnic.whowas.rdap.RdapHistory;
-import net.apnic.whowas.rdap.RdapObject;
-import net.apnic.whowas.rdap.RdapSearch;
-import net.apnic.whowas.rdap.TopLevelObject;
 import net.apnic.whowas.types.IP;
 import net.apnic.whowas.types.IpInterval;
 import net.apnic.whowas.types.Tuple;
-
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Component;
+
+import javax.servlet.http.HttpServletRequest;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * A set of helper functions and utilities to make RDAP results for controllers.
  */
-@Component
 public class RDAPControllerUtil
 {
     private final IntervalTree<IP, ObjectHistory, IpInterval> historyTree;
@@ -45,17 +35,14 @@ public class RDAPControllerUtil
      * Requires a set of global scope beans to accomplish util functions of this
      * class.
      */
-    @Autowired
     public RDAPControllerUtil(ObjectIndex objectIndex,
         ObjectSearchIndex searchIndex,
-        History history,
+        IntervalTree<IP, ObjectHistory, IpInterval> historyTree,
         RDAPResponseMaker responseMaker)
     {
         setupResponseHeaders();
         this.objectIndex = objectIndex;
-        this.historyTree = lazyMap(
-                history.getTree(),
-                objectKey -> history.getObjectHistory(objectKey).orElse(null));
+        this.historyTree = historyTree;
         this.responseMaker = responseMaker;
         this.searchIndex = searchIndex;
     }
@@ -172,40 +159,5 @@ public class RDAPControllerUtil
     {
         responseHeaders = new HttpHeaders();
         responseHeaders.setContentType(RdapConstants.RDAP_MEDIA_TYPE);
-    }
-
-    private <K extends Comparable<K>, V, V2, I extends Interval<K>> IntervalTree<K, V2, I> lazyMap(
-            IntervalTree<K, V, I> tree, Function<V, V2> mapper) {
-        return new IntervalTree<K, V2, I>()
-        {
-            @Override
-            public Stream<Tuple<I, V2>>
-            containing(I range) {
-                return tree.containing(range)
-                        .flatMap(tuple -> Optional.ofNullable(mapper.apply(tuple.second()))
-                                .map(Stream::of)
-                                .orElse(Stream.empty())
-                                .map(v2 -> new Tuple<>(tuple.first(), v2)));
-            }
-
-            @Override
-            public Optional<V2> exact(I range) {
-                return tree.exact(range).map(mapper);
-            }
-
-            @Override
-            public Stream<Tuple<I, V2>> intersecting(I range) {
-                return tree.intersecting(range)
-                        .flatMap(tuple -> Optional.ofNullable(mapper.apply(tuple.second()))
-                                .map(Stream::of)
-                                .orElse(Stream.empty())
-                                .map(v2 -> new Tuple<>(tuple.first(), v2)));
-            }
-
-            @Override
-            public int size() {
-                return tree.size();
-            }
-        };
     }
 }
