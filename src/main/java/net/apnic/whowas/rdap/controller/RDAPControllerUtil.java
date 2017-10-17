@@ -51,7 +51,7 @@ public class RDAPControllerUtil
     {
         setupResponseHeaders();
         this.objectIndex = objectIndex;
-        this.ipListIntervalTree = ipListIntervalTree(history);
+        this.ipListIntervalTree = ipListIntervalTree(history.getTree(), history::getObjectHistory);
         this.responseMaker = responseMaker;
         this.searchIndex = searchIndex;
     }
@@ -170,16 +170,18 @@ public class RDAPControllerUtil
         responseHeaders.setContentType(RdapConstants.RDAP_MEDIA_TYPE);
     }
 
-    private IntervalTree<IP, ObjectHistory, IpInterval> ipListIntervalTree(History history)
+    private IntervalTree<IP, ObjectHistory, IpInterval> ipListIntervalTree(
+            IntervalTree<IP, ObjectKey, IpInterval> tree,
+            ObjectIndex objectIndex)
     {
         return new IntervalTree<IP, ObjectHistory, IpInterval>()
         {
             @Override
             public Stream<Tuple<IpInterval, ObjectHistory>>
             containing(IpInterval range) {
-                return history.getTree().containing(range)
-                        .flatMap(p -> history
-                                .getObjectHistory(p.second())
+                return tree.containing(range)
+                        .flatMap(p -> objectIndex
+                                .historyForObject(p.second())
                                 .map(Stream::of)
                                 .orElse(Stream.empty())
                                 .map(h -> new Tuple<>(p.first(), h)));
@@ -187,15 +189,15 @@ public class RDAPControllerUtil
 
             @Override
             public Optional<ObjectHistory> exact(IpInterval range) {
-                return history.getTree().exact(range)
-                        .flatMap(history::getObjectHistory);
+                return tree.exact(range)
+                        .flatMap(objectIndex::historyForObject);
             }
 
             @Override
             public Stream<Tuple<IpInterval, ObjectHistory>> intersecting(IpInterval range) {
-                return history.getTree().intersecting(range)
-                        .flatMap(p -> history
-                                .getObjectHistory(p.second())
+                return tree.intersecting(range)
+                        .flatMap(p -> objectIndex
+                                .historyForObject(p.second())
                                 .map(Stream::of)
                                 .orElse(Stream.empty())
                                 .map(h -> new Tuple<>(p.first(), h)));
@@ -203,7 +205,7 @@ public class RDAPControllerUtil
 
             @Override
             public int size() {
-                return history.getTree().size();
+                return tree.size();
             }
         };
     }
