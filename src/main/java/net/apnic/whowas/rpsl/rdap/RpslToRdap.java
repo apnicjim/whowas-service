@@ -55,7 +55,7 @@ public class RpslToRdap implements BiFunction<ObjectKey, byte[], RdapObject>
 
     private static enum RpslVCardAttribute
     {
-        FORMATTED_NAME(o -> Stream.of(makeNode("fn", Collections.emptyMap(), o.getPrimaryAttribute().snd()))),
+        FORMATTED_NAME(o -> Stream.of(makeNode("fn", Collections.emptyMap(), o.getPrimaryAttribute().second()))),
 
         VCARD_KIND(o -> Stream.of(makeNode("kind", Collections.emptyMap(), getKind(o)))),
 
@@ -102,7 +102,7 @@ public class RpslToRdap implements BiFunction<ObjectKey, byte[], RdapObject>
         }
 
         private static TextNode getKind(RpslObject rpslObject) {
-            switch (rpslObject.getPrimaryAttribute().fst()) {
+            switch (rpslObject.getPrimaryAttribute().first()) {
                 case "person":
                     return new TextNode("individual");
                 case "org":

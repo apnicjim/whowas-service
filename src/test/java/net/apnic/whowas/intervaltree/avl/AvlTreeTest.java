@@ -81,7 +81,7 @@ public class AvlTreeTest {
                 .forEach(
                 queryInterval -> {
                     finalTree.containing(queryInterval)
-                            .map(Tuple::fst)
+                            .map(Tuple::first)
                             .forEach(i -> {
                                         Predicate<IntInterval> iContains = other -> i.low().compareTo(other.low()) <= 0 &&
                                                 i.high().compareTo(other.high()) >= 0;
@@ -92,9 +92,9 @@ public class AvlTreeTest {
                                     }
                             );
                     List<IntInterval> containing = finalTree.containing(queryInterval)
-                            .map(Tuple::fst).collect(Collectors.toList());
+                            .map(Tuple::first).collect(Collectors.toList());
                     List<IntInterval> intersecting = finalTree.intersecting(queryInterval)
-                            .map(Tuple::fst).collect(Collectors.toList());
+                            .map(Tuple::first).collect(Collectors.toList());
                     assertThat("The keys containing " + queryInterval + " are a subset of the keys intersecting " + queryInterval
                             , intersecting, (Matcher) hasItems(containing.toArray()));
                 });
@@ -108,7 +108,7 @@ public class AvlTreeTest {
         tree = tree.insert(new IntInterval(33, 44), "rocket");
         tree = tree.insert(new IntInterval(39, 39), "bleating tree");
         tree = tree.insert(new IntInterval(20, 39), "tusked");
-        List<String> frogs = tree.intersecting(new IntInterval(40, 50)).map(Tuple::snd).collect(Collectors.toList());
+        List<String> frogs = tree.intersecting(new IntInterval(40, 50)).map(Tuple::second).collect(Collectors.toList());
         assertThat("there are three frogs in range", frogs.size(), is(3));
         assertThat("there are no frogs in negative-land", tree.intersecting(new IntInterval(-1, -1)).count(), is(0L));
     }
@@ -139,7 +139,7 @@ public class AvlTreeTest {
 
         IntInterval nearZero = new IntInterval(-1000, 1000);
         assertTrue("the intersecting stream is parallel", tree.intersecting(nearZero).isParallel());
-        List<Integer> theNumbers = tree.intersecting(nearZero).map(Tuple::snd).collect(Collectors.toList());
+        List<Integer> theNumbers = tree.intersecting(nearZero).map(Tuple::second).collect(Collectors.toList());
         assertThat("There's the expected number of, er, numbers", theNumbers.size(), is(expected[0]));
     }
 
