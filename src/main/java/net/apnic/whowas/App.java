@@ -1,8 +1,13 @@
 package net.apnic.whowas;
 
+import net.apnic.whowas.entity.controller.EntitySearchService;
 import net.apnic.whowas.history.History;
+import net.apnic.whowas.history.ObjectHistory;
+import net.apnic.whowas.history.ObjectIndex;
 import net.apnic.whowas.intervaltree.Interval;
 import net.apnic.whowas.intervaltree.IntervalTree;
+import net.apnic.whowas.types.IP;
+import net.apnic.whowas.types.IpInterval;
 import net.apnic.whowas.types.Tuple;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -15,6 +20,33 @@ import java.util.stream.Stream;
 
 @SpringBootApplication
 public class App {
+
+    @Bean
+    public History history()
+    {
+        return new History();
+    }
+
+    @Bean
+    public ObjectIndex objectIndex() {
+        return objectKey -> history().getObjectHistory(objectKey);
+    }
+
+    //TODO replace dummy implementation
+    @Bean
+    public EntitySearchService entitySearchService() {
+        return new EntitySearchService() {
+            @Override
+            public Stream<ObjectHistory> findByHandle(String query) {
+                return Stream.empty();
+            }
+
+            @Override
+            public Stream<ObjectHistory> findByFn(String query) {
+                return Stream.empty();
+            }
+        };
+    }
 
     private <K extends Comparable<K>, V, V2, I extends Interval<K>> IntervalTree<K, V2, I> lazyMap(
             IntervalTree<K, V, I> tree, Function<V, V2> mapper) {
@@ -51,10 +83,13 @@ public class App {
         };
     }
 
+    //Might improve isolation if this was published as an interface with named queries on it instead
     @Bean
-    public History history()
-    {
-        return new History();
+    IntervalTree<IP, ObjectHistory, IpInterval> historyIpIntervalIntervalTree() {
+        return lazyMap(
+                history().getTree(),
+                objectKey -> history().getObjectHistory(objectKey).orElse(null)
+        );
     }
 
     public static void main(String[] args) {

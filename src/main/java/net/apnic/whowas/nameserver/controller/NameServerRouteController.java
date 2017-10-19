@@ -5,6 +5,7 @@ import javax.servlet.http.HttpServletRequest;
 import net.apnic.whowas.rdap.controller.RDAPControllerUtil;
 import net.apnic.whowas.rdap.TopLevelObject;
 
+import net.apnic.whowas.rdap.controller.RDAPResponseMaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,9 +33,9 @@ public class NameServerRouteController
     private final RDAPControllerUtil rdapControllerUtil;
 
     @Autowired
-    public NameServerRouteController(RDAPControllerUtil rdapControllerUtil)
+    public NameServerRouteController(RDAPResponseMaker rdapResponseMaker)
     {
-        this.rdapControllerUtil = rdapControllerUtil;
+        this.rdapControllerUtil = new RDAPControllerUtil(rdapResponseMaker);
     }
 
     /**
