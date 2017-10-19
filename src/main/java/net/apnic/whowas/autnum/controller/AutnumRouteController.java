@@ -3,10 +3,10 @@ package net.apnic.whowas.autnum.controller;
 import javax.servlet.http.HttpServletRequest;
 
 import net.apnic.whowas.error.MalformedRequestException;
-import net.apnic.whowas.history.ObjectClass;
-import net.apnic.whowas.history.ObjectKey;
+import net.apnic.whowas.history.*;
 import net.apnic.whowas.rdap.controller.RDAPControllerUtil;
 import net.apnic.whowas.rdap.TopLevelObject;
+import net.apnic.whowas.rdap.controller.RDAPResponseMaker;
 import net.apnic.whowas.types.Parsing;
 
 import org.slf4j.Logger;
@@ -31,11 +31,13 @@ public class AutnumRouteController
     private final static Logger LOGGER = LoggerFactory.getLogger(AutnumRouteController.class);
 
     private final RDAPControllerUtil rdapControllerUtil;
+    private final ObjectIndex objectIndex;
 
     @Autowired
-    public AutnumRouteController(RDAPControllerUtil rdapControllerUtil)
+    public AutnumRouteController(ObjectIndex objectIndex, RDAPResponseMaker rdapResponseMaker)
     {
-        this.rdapControllerUtil = rdapControllerUtil;
+        this.objectIndex = objectIndex;
+        this.rdapControllerUtil = new RDAPControllerUtil(rdapResponseMaker);
     }
 
     /**
@@ -54,8 +56,10 @@ public class AutnumRouteController
             throw new MalformedRequestException(ex);
         }
 
-        return rdapControllerUtil.mostCurrentResponseGet(
-            request, new ObjectKey(ObjectClass.AUT_NUM, handle));
+        return rdapControllerUtil.singleObjectResponse(request, objectIndex.historyForObject(new ObjectKey(ObjectClass.AUT_NUM, handle))
+                .flatMap(ObjectHistory::mostCurrent)
+                .map(Revision::getContents).orElse(null)
+        );
     }
 
     /**
@@ -74,7 +78,9 @@ public class AutnumRouteController
             throw new MalformedRequestException(ex);
         }
 
-        return rdapControllerUtil.mostCurrentResponseGet(
-            request, new ObjectKey(ObjectClass.AUT_NUM, handle));
+        return rdapControllerUtil.singleObjectResponse(request, objectIndex.historyForObject(new ObjectKey(ObjectClass.AUT_NUM, handle))
+                .flatMap(ObjectHistory::mostCurrent)
+                .map(Revision::getContents).orElse(null)
+        );
     }
 }

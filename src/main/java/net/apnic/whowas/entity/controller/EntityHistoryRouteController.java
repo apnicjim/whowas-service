@@ -2,11 +2,13 @@ package net.apnic.whowas.entity.controller;
 
 import javax.servlet.http.HttpServletRequest;
 
+import net.apnic.whowas.history.ObjectIndex;
 import net.apnic.whowas.rdap.controller.RDAPControllerUtil;
 import net.apnic.whowas.history.ObjectClass;
 import net.apnic.whowas.history.ObjectKey;
 import net.apnic.whowas.rdap.TopLevelObject;
 
+import net.apnic.whowas.rdap.controller.RDAPResponseMaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,11 +31,13 @@ public class EntityHistoryRouteController
     private final static Logger LOGGER = LoggerFactory.getLogger(EntityHistoryRouteController.class);
 
     private final RDAPControllerUtil rdapControllerUtil;
+    private final ObjectIndex objectIndex;
 
     @Autowired
-    public EntityHistoryRouteController(RDAPControllerUtil rdapControllerUtil)
+    public EntityHistoryRouteController(ObjectIndex objectIndex, RDAPResponseMaker rdapResponseMaker)
     {
-        this.rdapControllerUtil = rdapControllerUtil;
+        this.objectIndex = objectIndex;
+        this.rdapControllerUtil = new RDAPControllerUtil(rdapResponseMaker);
     }
 
     /**
@@ -46,7 +50,9 @@ public class EntityHistoryRouteController
     {
         LOGGER.debug("entity history GET path query for {}", handle);
 
-        return rdapControllerUtil.historyResponse(request,
-            new ObjectKey(ObjectClass.ENTITY, handle));
+        return rdapControllerUtil.historyResponse(
+                request,
+                objectIndex.historyForObject(new ObjectKey(ObjectClass.ENTITY, handle)).orElse(null)
+        );
     }
 }

@@ -2,11 +2,11 @@ package net.apnic.whowas.domain.controller;
 
 import javax.servlet.http.HttpServletRequest;
 
-import net.apnic.whowas.history.ObjectClass;
-import net.apnic.whowas.history.ObjectKey;
+import net.apnic.whowas.history.*;
 import net.apnic.whowas.rdap.controller.RDAPControllerUtil;
 import net.apnic.whowas.rdap.TopLevelObject;
 
+import net.apnic.whowas.rdap.controller.RDAPResponseMaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,11 +29,13 @@ public class DomainRouteController
     private final static Logger LOGGER = LoggerFactory.getLogger(DomainRouteController.class);
 
     private final RDAPControllerUtil rdapControllerUtil;
+    private final ObjectIndex objectIndex;
 
     @Autowired
-    public DomainRouteController(RDAPControllerUtil rdapControllerUtil)
+    public DomainRouteController(ObjectIndex objectIndex, RDAPResponseMaker rdapResponseMaker)
     {
-        this.rdapControllerUtil = rdapControllerUtil;
+        this.objectIndex = objectIndex;
+        this.rdapControllerUtil = new RDAPControllerUtil(rdapResponseMaker);
     }
 
     @RequestMapping(value="/{handle:.+}", method=RequestMethod.GET)
@@ -43,8 +45,10 @@ public class DomainRouteController
     {
         LOGGER.debug("domain GET path query for {}", handle);
 
-        return rdapControllerUtil.mostCurrentResponseGet(
-            request, new ObjectKey(ObjectClass.DOMAIN, handle));
+        return rdapControllerUtil.singleObjectResponse(request, objectIndex.historyForObject(new ObjectKey(ObjectClass.DOMAIN, handle))
+                .flatMap(ObjectHistory::mostCurrent)
+                .map(Revision::getContents).orElse(null)
+        );
     }
 
     @RequestMapping(value="/{handle:.+}", method=RequestMethod.HEAD)
@@ -54,7 +58,9 @@ public class DomainRouteController
     {
         LOGGER.debug("domain HEAD path query for {}", handle);
 
-        return rdapControllerUtil.mostCurrentResponseGet(
-            request, new ObjectKey(ObjectClass.DOMAIN, handle));
+        return rdapControllerUtil.singleObjectResponse(request, objectIndex.historyForObject(new ObjectKey(ObjectClass.DOMAIN, handle))
+                .flatMap(ObjectHistory::mostCurrent)
+                .map(Revision::getContents).orElse(null)
+        );
     }
 }

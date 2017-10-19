@@ -2,11 +2,13 @@ package net.apnic.whowas.domain.controller;
 
 import javax.servlet.http.HttpServletRequest;
 
+import net.apnic.whowas.history.ObjectIndex;
 import net.apnic.whowas.rdap.controller.RDAPControllerUtil;
 import net.apnic.whowas.history.ObjectClass;
 import net.apnic.whowas.history.ObjectKey;
 import net.apnic.whowas.rdap.TopLevelObject;
 
+import net.apnic.whowas.rdap.controller.RDAPResponseMaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,11 +32,13 @@ public class DomainHistoryRouteController
         LoggerFactory.getLogger(DomainHistoryRouteController.class);
 
     private final RDAPControllerUtil rdapControllerUtil;
+    private final ObjectIndex objectIndex;
 
     @Autowired
-    public DomainHistoryRouteController(RDAPControllerUtil rdapControllerUtil)
+    public DomainHistoryRouteController(ObjectIndex objectIndex, RDAPResponseMaker rdapResponseMaker)
     {
-        this.rdapControllerUtil = rdapControllerUtil;
+        this.objectIndex = objectIndex;
+        this.rdapControllerUtil = new RDAPControllerUtil(rdapResponseMaker);
     }
 
     /**
@@ -47,7 +51,9 @@ public class DomainHistoryRouteController
     {
         LOGGER.debug("domain history GET path query for {}", handle);
 
-        return rdapControllerUtil.historyResponse(request,
-            new ObjectKey(ObjectClass.DOMAIN, handle));
+        return rdapControllerUtil.historyResponse(
+                request,
+                objectIndex.historyForObject(new ObjectKey(ObjectClass.DOMAIN, handle)).orElse(null)
+        );
     }
 }

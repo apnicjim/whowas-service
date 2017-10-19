@@ -7,9 +7,11 @@ import net.apnic.whowas.rdap.controller.RDAPControllerUtil;
 import net.apnic.whowas.rdap.Error;
 import net.apnic.whowas.rdap.TopLevelObject;
 
+import net.apnic.whowas.rdap.controller.RDAPResponseMaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -26,9 +28,10 @@ public class ErrorController
 
     private final RDAPControllerUtil rdapControllerUtil;
 
-    public ErrorController(RDAPControllerUtil rdapControllerUtil)
+    @Autowired
+    public ErrorController(RDAPResponseMaker rdapResponseMaker)
     {
-        this.rdapControllerUtil = rdapControllerUtil;
+        this.rdapControllerUtil = new RDAPControllerUtil(rdapResponseMaker);
     }
 
     /**
@@ -43,7 +46,7 @@ public class ErrorController
         HttpServletRequest request, Exception ex)
     {
         LOGGER.error("Unhandled exception: ", ex);
-        return rdapControllerUtil.errorResponseGet(request,
+        return rdapControllerUtil.errorResponse(request,
             Error.SERVER_EXCEPTION, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
@@ -57,7 +60,7 @@ public class ErrorController
         MalformedRequestException ex)
     {
         LOGGER.debug("Malformed request received");
-        return rdapControllerUtil.errorResponseGet(request,
+        return rdapControllerUtil.errorResponse(request,
             Error.MALFORMED_REQUEST, HttpStatus.BAD_REQUEST);
     }
 
@@ -71,7 +74,7 @@ public class ErrorController
         NoHandlerFoundException ex)
     {
         LOGGER.debug("Not handler found exception");
-        return rdapControllerUtil.errorResponseGet(request,
+        return rdapControllerUtil.errorResponse(request,
             Error.NOT_FOUND, HttpStatus.NOT_FOUND);
     }
 }

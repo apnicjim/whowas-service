@@ -45,6 +45,6 @@ public class NameServerHistoryRouteController
         @PathVariable("handle") String handle)
     {
         LOGGER.debug("nameserver history GET path query for {}", handle);
-        return rdapControllerUtil.notImplementedResponseGet(request);
+        return rdapControllerUtil.notImplementedResponse(request);
     }
 }

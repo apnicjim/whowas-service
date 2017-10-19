@@ -3,8 +3,13 @@ package net.apnic.whowas.ip.controller;
 import javax.servlet.http.HttpServletRequest;
 
 import net.apnic.whowas.error.MalformedRequestException;
+import net.apnic.whowas.history.ObjectHistory;
+import net.apnic.whowas.history.Revision;
+import net.apnic.whowas.intervaltree.IntervalTree;
 import net.apnic.whowas.rdap.controller.RDAPControllerUtil;
 import net.apnic.whowas.rdap.TopLevelObject;
+import net.apnic.whowas.rdap.controller.RDAPResponseMaker;
+import net.apnic.whowas.types.IP;
 import net.apnic.whowas.types.IpInterval;
 import net.apnic.whowas.types.Parsing;
 
@@ -18,6 +23,8 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.HandlerMapping;
 
+import java.util.Optional;
+
 @RestController
 @RequestMapping("/ip")
 public class IpRouteController
@@ -25,11 +32,13 @@ public class IpRouteController
     private final static Logger LOGGER = LoggerFactory.getLogger(IpRouteController.class);
 
     private final RDAPControllerUtil rdapControllerUtil;
+    private final IntervalTree<IP, ObjectHistory, IpInterval> historyTree;
 
     @Autowired
-    public IpRouteController(RDAPControllerUtil rdapControllerUtil)
+    public IpRouteController(IntervalTree<IP, ObjectHistory, IpInterval> historyTree, RDAPResponseMaker rdapResponseMaker)
     {
-        this.rdapControllerUtil = rdapControllerUtil;
+        this.historyTree = historyTree;
+        this.rdapControllerUtil = new RDAPControllerUtil(rdapResponseMaker);
     }
 
     @RequestMapping(value="/**", method=RequestMethod.GET)
@@ -50,7 +59,10 @@ public class IpRouteController
             throw new MalformedRequestException(ex);
         }
 
-        return rdapControllerUtil.mostCurrentResponseGet(request, range);
+        return rdapControllerUtil.singleObjectResponse(
+                request,
+                mostCurrent(range).map(Revision::getContents).orElse(null)
+        );
     }
 
     @RequestMapping(value="/**", method=RequestMethod.HEAD)
@@ -71,6 +83,17 @@ public class IpRouteController
             throw new MalformedRequestException(ex);
         }
 
-        return rdapControllerUtil.mostCurrentResponseGet(request, range);
+        return rdapControllerUtil.singleObjectResponse(
+                request,
+                mostCurrent(range).map(Revision::getContents).orElse(null)
+        );
+
+    }
+
+    private Optional<Revision> mostCurrent(IpInterval range) {
+        return historyTree.containing(range)
+                .filter(t -> t.second().mostCurrent().isPresent())
+                .reduce((a, b) -> a.first().compareTo(b.first()) <= 0 ? b : a)
+                .flatMap(t -> t.second().mostCurrent());
     }
 }

@@ -13,41 +13,28 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.swing.text.html.Option;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
- * A set of helper functions and utilities to make RDAP results for controllers.
+ * Common RDAP response generation for RDAP controllers.
  */
 public class RDAPControllerUtil
 {
-    private final IntervalTree<IP, ObjectHistory, IpInterval> historyTree;
-    private final ObjectIndex objectIndex;
-    private final ObjectSearchIndex searchIndex;
     private HttpHeaders responseHeaders = null;
     private final RDAPResponseMaker responseMaker;
 
-    /**
-     * Default constructor.
-     *
-     * Requires a set of global scope beans to accomplish util functions of this
-     * class.
-     */
-    public RDAPControllerUtil(ObjectIndex objectIndex,
-        ObjectSearchIndex searchIndex,
-        IntervalTree<IP, ObjectHistory, IpInterval> historyTree,
-        RDAPResponseMaker responseMaker)
+    public RDAPControllerUtil(RDAPResponseMaker responseMaker)
     {
         setupResponseHeaders();
-        this.objectIndex = objectIndex;
-        this.historyTree = historyTree;
         this.responseMaker = responseMaker;
-        this.searchIndex = searchIndex;
     }
 
-    public ResponseEntity<TopLevelObject> errorResponseGet(
+    public ResponseEntity<TopLevelObject> errorResponse(
         HttpServletRequest request, Error error, HttpStatus status)
     {
         return new ResponseEntity<TopLevelObject>(
@@ -56,7 +43,7 @@ public class RDAPControllerUtil
             status);
     }
 
-    public ResponseEntity<TopLevelObject> notImplementedResponseGet(
+    public ResponseEntity<TopLevelObject> notImplementedResponse(
         HttpServletRequest request)
     {
         return new ResponseEntity<TopLevelObject>(
@@ -66,93 +53,50 @@ public class RDAPControllerUtil
     }
 
     public ResponseEntity<TopLevelObject> historyResponse(
-        HttpServletRequest request, ObjectKey objectKey)
+            HttpServletRequest request, ObjectHistory objectHistory)
     {
-        return objectIndex.historyForObject(objectKey)
-            .map(RdapHistory::new)
-            .map(history -> responseMaker.makeResponse(history, request))
-            .map(response -> new ResponseEntity<TopLevelObject>(
-                    response, responseHeaders, HttpStatus.OK))
-            .orElse(new ResponseEntity<TopLevelObject>(
-                responseMaker.makeResponse(Error.NOT_FOUND, request),
-                responseHeaders,
-                HttpStatus.NOT_FOUND));
+        return Optional.ofNullable(objectHistory)
+                .map(RdapHistory::new)
+                .map(history -> responseMaker.makeResponse(history, request))
+                .map(response -> new ResponseEntity<TopLevelObject>(
+                        response, responseHeaders, HttpStatus.OK))
+                .orElse(new ResponseEntity<TopLevelObject>(
+                        responseMaker.makeResponse(Error.NOT_FOUND, request),
+                        responseHeaders,
+                        HttpStatus.NOT_FOUND));
     }
 
-    public ResponseEntity<TopLevelObject> historyResponse(
-        HttpServletRequest request, IpInterval range)
-    {
-        int pfxCap = range.prefixSize() +
-            (range.low().getAddressFamily() == IP.AddressFamily.IPv4 ? 8 : 16);
-
-        List<ObjectHistory> ipHistory =
-            historyTree
-                .intersecting(range)
-                .filter(t -> t.first().prefixSize() <= pfxCap)
-                .sorted(Comparator.comparing(Tuple::first))
-                .map(Tuple::second)
-                .collect(Collectors.toList());
-
-        return Optional.ofNullable(ipHistory.size() > 0 ? ipHistory : null)
-            .map(RdapHistory::new)
-            .map(history -> responseMaker.makeResponse(history, request))
-            .map(response -> new ResponseEntity<TopLevelObject>(
-                    response, responseHeaders, HttpStatus.OK))
-            .orElse(new ResponseEntity<TopLevelObject>(
-                responseMaker.makeResponse(Error.NOT_FOUND, request),
-                responseHeaders,
-                HttpStatus.NOT_FOUND));
+    public ResponseEntity<TopLevelObject> historiesResponse(HttpServletRequest request, IpInterval range, List<ObjectHistory> histories) {
+        return Optional.ofNullable(histories.size() > 0 ? histories : null)
+                .map(RdapHistory::new)
+                .map(history -> responseMaker.makeResponse(history, request))
+                .map(response -> new ResponseEntity<TopLevelObject>(
+                        response, responseHeaders, HttpStatus.OK))
+                .orElse(new ResponseEntity<TopLevelObject>(
+                        responseMaker.makeResponse(Error.NOT_FOUND, request),
+                        responseHeaders,
+                        HttpStatus.NOT_FOUND));
     }
 
-    public ResponseEntity<TopLevelObject> mostCurrentResponseGet(
-        HttpServletRequest request, ObjectKey objectKey)
-    {
-        return objectIndex.historyForObject(objectKey)
-            .flatMap(ObjectHistory::mostCurrent)
-            .map(Revision::getContents)
-            .map(rdapObject -> responseMaker.makeResponse(rdapObject, request))
-            .map(rdapTLO -> new ResponseEntity<TopLevelObject>(
-                rdapTLO, responseHeaders, HttpStatus.OK))
-            .orElse(new ResponseEntity<TopLevelObject>(
-                responseMaker.makeResponse(Error.NOT_FOUND, request),
-                responseHeaders,
-                HttpStatus.NOT_FOUND));
-    }
-
-    public ResponseEntity<TopLevelObject> mostCurrentResponseGet(
-        HttpServletRequest request, ObjectSearchKey objectSearchKey)
-    {
-        List<RdapObject> searchObjects =
-            searchIndex.historySearchForObject(objectSearchKey)
-                    .map(objectIndex::historyForObject)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .filter(oHistory -> oHistory.mostCurrent().isPresent())
-                    .map(oHistory -> oHistory.mostCurrent().get().getContents())
-                    .collect(Collectors.toList());
-
+    //Why does this one need the object class? because it is a search response?
+    public ResponseEntity<TopLevelObject> searchResponse(
+            Stream<RdapObject> rdapObjectStream,
+            ObjectClass objectClass,
+            HttpServletRequest request) {
         return new ResponseEntity<TopLevelObject>(
-            responseMaker.makeResponse(
-                RdapSearch.build(objectSearchKey.getObjectClass(),
-                                 searchObjects), request),
+                responseMaker.makeResponse(
+                        RdapSearch.build(objectClass, rdapObjectStream.collect(Collectors.toList())), request),
                 responseHeaders, HttpStatus.OK);
     }
 
-    public ResponseEntity<TopLevelObject> mostCurrentResponseGet(
-        HttpServletRequest request, IpInterval range)
-    {
-        return historyTree.containing(range)
-            .filter(t -> t.second().mostCurrent().isPresent())
-            .reduce((a, b) -> a.first().compareTo(b.first()) <= 0 ? b : a)
-            .flatMap(t -> t.second().mostCurrent())
-            .map(Revision::getContents)
-            .map(rdapObject -> responseMaker.makeResponse(rdapObject, request))
-            .map(rdapTLO -> new ResponseEntity<TopLevelObject>(
-                rdapTLO, responseHeaders, HttpStatus.OK))
-            .orElse(new ResponseEntity<TopLevelObject>(
-                responseMaker.makeResponse(Error.NOT_FOUND, request),
-                responseHeaders,
-                HttpStatus.NOT_FOUND));
+    public ResponseEntity<TopLevelObject> singleObjectResponse(HttpServletRequest request, RdapObject rdapObject) {
+        return Optional.ofNullable(rdapObject).map(o -> responseMaker.makeResponse(o, request))
+                .map(rdapTLO -> new ResponseEntity<TopLevelObject>(
+                        rdapTLO, responseHeaders, HttpStatus.OK))
+                .orElse(new ResponseEntity<TopLevelObject>(
+                        responseMaker.makeResponse(Error.NOT_FOUND, request),
+                        responseHeaders,
+                        HttpStatus.NOT_FOUND));
     }
 
     private void setupResponseHeaders()

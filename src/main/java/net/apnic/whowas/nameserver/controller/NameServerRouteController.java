@@ -46,7 +46,7 @@ public class NameServerRouteController
         @PathVariable("handle") String handle)
     {
         LOGGER.debug("nameserver GET path query for {}", handle);
-        return rdapControllerUtil.notImplementedResponseGet(request);
+        return rdapControllerUtil.notImplementedResponse(request);
     }
 
     /**
@@ -59,6 +59,6 @@ public class NameServerRouteController
         @PathVariable("handle") String handle)
     {
         LOGGER.debug("nameserver HEAD path query for {}", handle);
-        return rdapControllerUtil.notImplementedResponseGet(request);
+        return rdapControllerUtil.notImplementedResponse(request);
     }
 }
