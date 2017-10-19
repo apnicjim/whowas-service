@@ -43,20 +43,36 @@ public class EntityControllerTests {
     private EntitySearchService searchService;
 
     @Test
-    public void entitySearchByHandleReturnsExpectedResponse() throws Exception {
+    public void searchByHandleExpectedResponse() throws Exception {
         given(searchService.findByHandle("myHandle"))
                 .willReturn(Stream.of(testObjectHistory()));
 
         ResultActions actions = mvc.perform(get("/entities?handle=myHandle"))
                 .andExpect(status().isOk());
-        actions = expectRdap(actions);
+        expectRdap(actions)
+                .andExpect(jsonPath("$.entitySearchResults", not(empty())));
+    }
 
-        MvcResult result = actions.andReturn();
+    @Test
+    public void runtimeExceptionIs500() throws Exception {
+        given(searchService.findByHandle("myHandle"))
+                .willThrow(new RuntimeException("Test exception"));
 
-        result.getResponse().getHeaderNames().forEach(
-                headerName -> System.out.println(headerName +": " + result.getResponse().getHeaders(headerName))
-        );
-        System.out.println(prettyJson(result.getResponse().getContentAsString()));
+        ResultActions actions = mvc.perform(get("/entities?handle=myHandle"))
+                .andExpect(status().isInternalServerError());
+        expectRdap(actions)
+                .andExpect(jsonPath("$.errorCode", is("500")));
+    }
+
+    @Test
+    public void noSearchResultsIsEmptyRDAPResponse() throws Exception {
+        given(searchService.findByHandle("myHandle"))
+                .willReturn(Stream.empty());
+
+        ResultActions actions = mvc.perform(get("/entities?handle=myHandle"))
+                .andExpect(status().isOk());
+        expectRdap(actions)
+                .andExpect(jsonPath("$.entitySearchResults", is(empty())));
     }
 
     private ObjectHistory testObjectHistory() {
