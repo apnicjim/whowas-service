@@ -13,13 +13,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
@@ -51,53 +48,6 @@ public class AvlTreeTest {
         assertThat("finding a precise range gives its value", tree.exact(new IntInterval(33,45)), is(Optional.of("corroboree")));
         assertThat("equal starts don't matter", tree.exact(new IntInterval(33, 44)), is(Optional.of("rocket")));
         assertThat("equal ends don't matter", tree.exact(new IntInterval(20, 39)), is(Optional.of("tusked")));
-    }
-
-
-    @Test
-    public void testContaining() throws Exception
-    {
-        Random r = new Random();
-        int min = 20;
-        int max = 50;
-        Supplier<IntInterval> randomIntInterval = () -> {
-            int a = r.nextInt((max - min) + 1) + min;
-            int b = r.nextInt((max - min) + 1) + min;
-            return a < b ? new IntInterval(a, b) : new IntInterval(b, a);
-        };
-
-        AvlTree<Integer, String, IntInterval> tree = new AvlTree<>();
-        for(int i = 0; i <= 500; i++) {
-            try {
-                tree = tree.insert(randomIntInterval.get(), "dummy");
-            } catch (IllegalArgumentException e) {
-                //skip duplicate keys
-            }
-        }
-        AvlTree<Integer, String, IntInterval> finalTree = tree;
-
-        Stream.generate(randomIntInterval)
-                .limit(500)
-                .forEach(
-                queryInterval -> {
-                    finalTree.containing(queryInterval)
-                            .map(Tuple::first)
-                            .forEach(i -> {
-                                        Predicate<IntInterval> iContains = other -> i.low().compareTo(other.low()) <= 0 &&
-                                                i.high().compareTo(other.high()) >= 0;
-
-                                        assertTrue(
-                                                "The returned interval " + i + " contains the query interval " + queryInterval,
-                                                iContains.test(queryInterval));
-                                    }
-                            );
-                    List<IntInterval> containing = finalTree.containing(queryInterval)
-                            .map(Tuple::first).collect(Collectors.toList());
-                    List<IntInterval> intersecting = finalTree.intersecting(queryInterval)
-                            .map(Tuple::first).collect(Collectors.toList());
-                    assertThat("The keys containing " + queryInterval + " are a subset of the keys intersecting " + queryInterval
-                            , intersecting, (Matcher) hasItems(containing.toArray()));
-                });
     }
 
     @Test
