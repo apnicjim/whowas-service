@@ -3,7 +3,9 @@ package net.apnic.whowas;
 import net.apnic.whowas.history.History;
 import net.apnic.whowas.history.ObjectHistory;
 import net.apnic.whowas.history.ObjectIndex;
+import net.apnic.whowas.history.Revision;
 import net.apnic.whowas.intervaltree.IntervalTree;
+import net.apnic.whowas.loaders.Loader;
 import net.apnic.whowas.loaders.RipeDbLoader;
 import net.apnic.whowas.progress.Bar;
 import net.apnic.whowas.types.IP;
@@ -37,12 +39,15 @@ import java.io.InputStream;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.Properties;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -140,23 +145,43 @@ public class App {
         }
 
         LOGGER.info("Loading history from database, starting at #{}", dbLoader.getLastSerial());
+        //loading bar
+        Bar bar = new Bar(107, LOGGER::info);
+        final ZonedDateTime lastDate[] = { ZonedDateTime.of(2008, 1, 1, 1, 1, 1,1, ZoneId.systemDefault()) };
+        lastDate[0] = lastDate[0].truncatedTo(ChronoUnit.DAYS).withDayOfMonth(1);
+        Loader.RevisionConsumer loadingBarConsumer = (k, r) -> {
+            ZonedDateTime x = r.getValidFrom().truncatedTo(ChronoUnit.DAYS).withDayOfMonth(1);
+            if (x.isAfter(lastDate[0])) {
+                lastDate[0] = x;
+                bar.inc();
+            }
+        };
+
+        lastDbException = loadFromLoader(dbLoader, Arrays.asList(
+                loadingBarConsumer,
+                history::addRevision
+        )).orElse(null);
+        LOGGER.info("IP interval tree construction completed, {} entries", history.getTree().size());
+    }
+
+    //returns the exception that interrupted the loading process
+    public static Optional<Exception> loadFromLoader(Loader loader, Collection<Loader.RevisionConsumer> consumers) {
+        Exception lastException = null;
         try {
-            Bar bar = new Bar(107, LOGGER::info);
-            final ZonedDateTime lastDate[] = { ZonedDateTime.of(2008, 1, 1, 1, 1, 1,1, ZoneId.systemDefault()) };
-            lastDate[0] = lastDate[0].truncatedTo(ChronoUnit.DAYS).withDayOfMonth(1);
-            dbLoader.loadWith((k, r) -> {
-                ZonedDateTime x = r.getValidFrom().truncatedTo(ChronoUnit.DAYS).withDayOfMonth(1);
-                if (x.isAfter(lastDate[0])) {
-                    lastDate[0] = x;
-                    bar.inc();
-                }
-                history.addRevision(k, r);
+            loader.loadWith((k, r) -> {
+                consumers.forEach(c -> {
+                    try {
+                        c.accept(k, r);
+                    } catch (Exception e) {
+                        LOGGER.warn("Failed to load revision: {}", r, e);
+                    }
+                });
             });
         } catch (Exception ex) {
             LOGGER.error("Failed to load data: {}", ex.getLocalizedMessage(), ex);
-            lastDbException = ex;
+            lastException = ex;
         }
-        LOGGER.info("IP interval tree construction completed, {} entries", history.getTree().size());
+        return Optional.ofNullable(lastException);
     }
 
     @Bean
