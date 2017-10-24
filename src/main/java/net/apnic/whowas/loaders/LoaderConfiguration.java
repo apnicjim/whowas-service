@@ -2,6 +2,7 @@ package net.apnic.whowas.loaders;
 
 import net.apnic.whowas.App;
 import net.apnic.whowas.history.History;
+import net.apnic.whowas.history.Revision;
 import net.apnic.whowas.progress.Bar;
 import org.nustaq.serialization.FSTObjectInput;
 import org.nustaq.serialization.FSTObjectOutput;
@@ -23,6 +24,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
 import javax.annotation.PostConstruct;
+import javax.swing.text.html.Option;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -30,10 +32,14 @@ import java.io.InputStream;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Consumer;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -87,23 +93,44 @@ public class LoaderConfiguration {
         }
 
         LOGGER.info("Loading history from database, starting at #{}", dbLoader.getLastSerial());
+
+        //loading bar
+        Bar bar = new Bar(107, LOGGER::info);
+        final ZonedDateTime lastDate[] = { ZonedDateTime.of(2008, 1, 1, 1, 1, 1,1, ZoneId.systemDefault()) };
+        lastDate[0] = lastDate[0].truncatedTo(ChronoUnit.DAYS).withDayOfMonth(1);
+        Consumer<Revision> loadingBarConsumer = revision -> {
+            ZonedDateTime x = revision.getValidFrom().truncatedTo(ChronoUnit.DAYS).withDayOfMonth(1);
+            if (x.isAfter(lastDate[0])) {
+                lastDate[0] = x;
+                bar.inc();
+            }
+        };
+
+        lastDbException = loadFromLoader(dbLoader, Arrays.asList(
+                loadingBarConsumer,
+                revision -> history.addRevision(revision.getContents().getObjectKey(), revision)
+        )).orElse(null);
+        LOGGER.info("IP interval tree construction completed, {} entries", history.getTree().size());
+    }
+
+    //returns the most recent exception thrown by the loading process
+    public static Optional<Exception> loadFromLoader(Loader loader, Collection<Consumer<Revision>> consumers) {
+        Exception lastException = null;
         try {
-            Bar bar = new Bar(107, LOGGER::info);
-            final ZonedDateTime lastDate[] = { ZonedDateTime.of(2008, 1, 1, 1, 1, 1,1, ZoneId.systemDefault()) };
-            lastDate[0] = lastDate[0].truncatedTo(ChronoUnit.DAYS).withDayOfMonth(1);
-            dbLoader.loadWith((k, r) -> {
-                ZonedDateTime x = r.getValidFrom().truncatedTo(ChronoUnit.DAYS).withDayOfMonth(1);
-                if (x.isAfter(lastDate[0])) {
-                    lastDate[0] = x;
-                    bar.inc();
-                }
-                history.addRevision(k, r);
+            loader.loadWith((k, r) -> {
+                consumers.forEach(c -> {
+                    try {
+                        c.accept(r);
+                    } catch (Exception e) {
+                        LOGGER.warn("Failed to load revision: {}", r, e);
+                    }
+                });
             });
         } catch (Exception ex) {
             LOGGER.error("Failed to load data: {}", ex.getLocalizedMessage(), ex);
-            lastDbException = ex;
+            lastException = ex;
         }
-        LOGGER.info("IP interval tree construction completed, {} entries", history.getTree().size());
+        return Optional.ofNullable(lastException);
     }
 
     @Bean
