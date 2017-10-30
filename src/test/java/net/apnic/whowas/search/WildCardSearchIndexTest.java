@@ -12,8 +12,6 @@ import net.apnic.whowas.history.Revision;
 import net.apnic.whowas.rdap.RdapObject;
 import org.junit.Test;
 
-import static org.hamcrest.Matchers.empty;
-import static org.junit.Assert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -23,10 +21,10 @@ public class WildCardSearchIndexTest
     public void checkExactMatching()
     {
         List<Revision> revisions = Arrays.asList(
-            revision(new ObjectKey(ObjectClass.ENTITY,"bat1")),
-            revision(new ObjectKey(ObjectClass.ENTITY,"bat12")),
-            revision(new ObjectKey(ObjectClass.ENTITY,"bat")),
-            revision(new ObjectKey(ObjectClass.ENTITY,"wing-bat1"))
+            revision("bat1"),
+            revision("bat12"),
+            revision("bat"),
+            revision("wing-bat1")
         );
 
         WildCardSearchIndex index = new WildCardSearchIndex(
@@ -54,10 +52,10 @@ public class WildCardSearchIndexTest
     public void checkWildCardMatching()
     {
         List<Revision> revisions = Arrays.asList(
-            revision(new ObjectKey(ObjectClass.ENTITY,"bat1")),
-            revision(new ObjectKey(ObjectClass.ENTITY,"bat12")),
-            revision(new ObjectKey(ObjectClass.ENTITY,"bat")),
-            revision(new ObjectKey(ObjectClass.ENTITY,"wing-bat1"))
+            revision("bat1"),
+            revision("bat12"),
+            revision("bat"),
+            revision("wing-bat1")
         );
 
         WildCardSearchIndex index = new WildCardSearchIndex(
@@ -115,19 +113,10 @@ public class WildCardSearchIndexTest
         assertEquals(keys.size(), 1);
     }
 
-    @Test
-    public void foreignClassesAreNotIndexed() {
-        WildCardSearchIndex index = new WildCardSearchIndex(
-                ObjectClass.ENTITY, "handle",
-                (rev, objectKey) -> Stream.of(objectKey.getObjectName()));
-
-        ObjectKey objectKey = new ObjectKey(ObjectClass.AUT_NUM, "myObject");
-        index.putMapping(revision(objectKey), objectKey);
-
-        List<ObjectKey> results = index.getObjectsForKey(new ObjectSearchKey(ObjectClass.ENTITY, "handle", "myObject"), 10)
-                .collect(Collectors.toList());
-
-        assertThat(results, empty());
+    private Revision revision(String objectName) {
+        ObjectKey objectKey = new ObjectKey(ObjectClass.AUT_NUM, objectName);
+        return new Revision(null, null,
+            new EmptyObject(objectKey));
     }
 
     private Revision revision(ObjectKey objectKey) {
