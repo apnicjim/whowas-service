@@ -38,10 +38,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 import java.util.Properties;
 import java.util.stream.Stream;
 import java.util.zip.DeflaterOutputStream;
@@ -118,9 +115,15 @@ public class App {
     private Exception lastDbException = null;
 
     @PostConstruct
-    public void initialise() {
+    public void initialise() throws ExecutionException, InterruptedException {
         dbLoader = new RipeDbLoader(jdbcOperations, -1L);
-        executorService.execute(this::buildTree);
+
+        /*
+          Bind the initial population (via calling synchronously here)
+          to application startup so that the port is not opened until
+          the application is ready to service requests
+        */
+        executorService.submit(this::buildTree).get();
     }
 
     private void buildTree() {
